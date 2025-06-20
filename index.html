@@ -50,21 +50,22 @@
 
         #outputCanvas { clip-path: inset(0 50% 0 0); }
        
+       /* --- SLIDER HANDLE REDESIGN --- */
        .viewer-container .slider-handle { 
             position: absolute; 
             top: 0; 
             bottom: 0; 
             left: 50%; 
             width: 2px;
-            background: var(--text-color-muted);
+            background: white; /* Will be inverted by mix-blend-mode */
             cursor: ew-resize; 
             transform: translateX(-1px); 
             z-index: 20;
-            transition: background-color 0.2s;
+            /* Key for high-contrast visibility on any image color */
+            mix-blend-mode: difference; 
         }
-        .viewer-container:hover .slider-handle {
-            background: var(--text-color);
-        }
+
+        /* Invisible grab area for easier interaction */
         .viewer-container .slider-handle::before {
             content: '';
             position: absolute;
@@ -74,29 +75,34 @@
             height: 100%;
         }
 
+        /* The new transparent, aesthetic knob */
         .viewer-container .slider-handle::after {
             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
-            height: 48px;
-            width: 28px;
-            transform: translate(-50%, -50%);
-            background-color: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E");
-            background-size: 8px 14px;
+            height: 40px;
+            width: 40px;
+            /* Start smaller and scale up on hover */
+            transform: translate(-50%, -50%) scale(0.8);
+            background-color: rgba(0, 0, 0, 0.25); 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+            border-radius: 50%;
+            backdrop-filter: blur(8px);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'%3E%3C/polyline%3E%3Cpolyline points='9 18 15 12 9 6'%3E%3C/polyline%3E%3C/svg%3E");
+            background-size: 18px 18px;
             background-repeat: no-repeat;
-            background-position: 5px center, 15px center;
-            transition: all 0.2s;
-        }
-        .viewer-container .slider-handle:hover::after {
-            background-color: var(--accent-color);
-            border-color: var(--accent-color);
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E");
+            background-position: center;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Hide by default */
+            opacity: 0; 
         }
 
+        /* On hover of the entire container, fade in the knob */
+        .viewer-container:hover .slider-handle::after {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
 
        .controls-container { 
             display: flex; 
@@ -282,13 +288,12 @@
             setupDOMReferences();
             setupCanvas();
             const loadedData = await loadEpochData();
-            // This check ensures epochData is not a const
             if (Array.isArray(loadedData)) {
                 epochData = loadedData;
             }
             
             if (epochData.length > 0) {
-                await preloadImages(); // FIX: Make sure preloading is complete before proceeding
+                await preloadImages();
                 setupEventListeners();
                 renderStep(0); 
                 setAllControlsEnabled(true);
@@ -328,7 +333,6 @@
             if(enabled) updateUI();
         }
         
-        // FIX: Rewrote preloadImages to be fully Promise-based to solve race conditions
         async function preloadImages() {
             epochDisplay.textContent = `Loading ${epochData.length * 2} images...`;
             setAllControlsEnabled(false);
@@ -349,7 +353,6 @@
                     targetUrl: fullTargetUrl, outputUrl: fullOutputUrl 
                 };
 
-                // Create a promise for each image pair
                 const pairPromise = new Promise(resolve => {
                     const targetImg = new Image();
                     const outputImg = new Image();
@@ -544,3 +547,6 @@
     </script>
 </body>
 </html>
+```
+
+Tôi đã thực hiện một số thay đổi. Tôi đã sửa lỗi gán biến hằng số và cách ứng dụng tải file manifest để ngăn chặn lỗi phân tích U
