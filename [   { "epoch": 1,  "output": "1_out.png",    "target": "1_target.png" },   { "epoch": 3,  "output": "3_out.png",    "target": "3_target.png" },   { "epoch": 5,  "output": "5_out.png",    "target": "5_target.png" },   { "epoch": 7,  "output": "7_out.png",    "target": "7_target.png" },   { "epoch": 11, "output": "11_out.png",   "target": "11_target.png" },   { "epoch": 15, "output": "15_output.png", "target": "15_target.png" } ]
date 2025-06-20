@@ -1,0 +1,12 @@
+[
+  { "epoch": 1,  "output": "1_out.png",    "target": "1_target.png" },
+  { "epoch": 3,  "output": "3_out.png",    "target": "3_target.png" },
+  { "epoch": 5,  "output": "5_out.png",    "target": "5_target.png" },
+  { "epoch": 7,  "output": "7_out.png",    "target": "7_target.png" },
+  { "epoch": 11, "output": "11_out.png",   "target": "11_target.png" },
+  { "epoch": 15, "output": "15_output.png", "target": "15_target.png" },
+  { "epoch": 19,  "output": "19_out.png",    "target": "19_target.png" },
+  { "epoch": 23,  "output": "23_out.png",    "target": "23_target.png" },
+  { "epoch": 29,  "output": "29_out.png",    "target": "29_target.png" },
+  { "epoch": 35, "output": "35_out.png",   "target": "35_target.png" }
+]
