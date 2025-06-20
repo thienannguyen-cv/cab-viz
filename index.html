@@ -10,24 +10,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #f0f0f0;
-            --container-bg: #ffffff;
-            --text-color: #333333;
-            --text-color-muted: #777777;
-            --border-color: #cccccc;
-            --button-bg: #e0e0e0;
-            --button-hover-bg: #d5d5d5;
-            --accent-color: #1f77b4;
+            --bg-color: #1d1d1f;
+            --container-bg: #2c2c2e;
+            --text-color: #f5f5f7;
+            --text-color-muted: #a1a1a6;
+            --border-color: rgba(255, 255, 255, 0.15);
+            --button-bg: #434346;
+            --button-hover-bg: #5a5a5e;
+            --accent-color: #0A84FF;
+            --error-color: #ff453a;
         }
 
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-        }
-
-        h1 {
-            letter-spacing: -0.025em;
         }
        
         .viewer-container { 
@@ -36,11 +33,10 @@
             max-width: 512px; 
             aspect-ratio: 512 / 256; 
             overflow: hidden; 
-            border-radius: 8px; 
+            border-radius: 16px; 
             margin: auto;
             cursor: grab;
-            background-color: var(--container-bg);
-            border: 1px solid var(--border-color);
+            background-color: #000;
         }
         .viewer-container:active { cursor: grabbing; }
 
@@ -60,10 +56,14 @@
             bottom: 0; 
             left: 50%; 
             width: 2px;
-            background: var(--accent-color);
+            background: var(--text-color-muted);
             cursor: ew-resize; 
             transform: translateX(-1px); 
             z-index: 20;
+            transition: background-color 0.2s;
+        }
+        .viewer-container:hover .slider-handle {
+            background: var(--text-color);
         }
         .viewer-container .slider-handle::before {
             content: '';
@@ -79,13 +79,24 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            height: 40px;
-            width: 10px;
+            height: 48px;
+            width: 28px;
             transform: translate(-50%, -50%);
-            background-color: var(--container-bg);
+            background-color: var(--bg-color);
             border: 1px solid var(--border-color);
-            border-radius: 3px;
+            border-radius: 14px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E");
+            background-size: 8px 14px;
+            background-repeat: no-repeat;
+            background-position: 5px center, 15px center;
+            transition: all 0.2s;
         }
+        .viewer-container .slider-handle:hover::after {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='12' y1='6' x2='12' y2='18'%3E%3C/cline%3E%3C/svg%3E");
+        }
+
 
        .controls-container { 
             display: flex; 
@@ -93,12 +104,12 @@
             justify-content: center; 
             gap: 1rem; 
             padding: 0.75rem; 
-            border-radius: 8px;
+            border-radius: 16px;
             background-color: var(--container-bg);
             border: 1px solid var(--border-color);
        }
        .control-btn { 
-           border: 1px solid var(--border-color);
+           border: none;
            background-color: var(--button-bg);
            color: var(--text-color);
            display: flex; 
@@ -112,26 +123,20 @@
         }
        .control-btn:hover:not(:disabled) {
            background-color: var(--button-hover-bg);
-           border-color: #bbb;
        }
         .control-btn:active:not(:disabled) {
             transform: scale(0.95);
-            background-color: var(--accent-color);
-            color: white;
-            border-color: var(--accent-color);
         }
        .control-btn:disabled { 
-            background-color: #f5f5f5;
+            background-color: var(--container-bg);
             color: var(--text-color-muted);
             cursor: not-allowed;
-            border-color: #e0e0e0;
        }
        .control-btn svg { width: 22px; height: 22px; }
         
         #epoch-display { 
             font-family: 'Inter', sans-serif; 
-            font-size: 0.9rem;
-            font-feature-settings: "tnum"; /* Use tabular numbers for consistent spacing */
+            font-size: 0.875rem; 
             font-weight: 500;
             color: var(--text-color-muted); 
             min-width: 200px; 
@@ -146,31 +151,25 @@
             display: flex;
             gap: 8px;
             padding: 6px;
-            border-radius: 8px;
-            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            background-color: rgba(29, 29, 31, 0.75);
             border: 1px solid var(--border-color);
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(12px);
         }
         .zoom-btn {
-            background-color: var(--button-bg);
-            border: 1px solid var(--border-color);
+            background-color: transparent;
+            border: none;
             color: var(--text-color);
             width: 36px;
             height: 36px;
-            border-radius: 6px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s ease-out;
+            transition: background-color 0.2s ease-out;
         }
          .zoom-btn:hover:not(:disabled) { background-color: var(--button-hover-bg); }
-         .zoom-btn:active:not(:disabled) {
-            transform: scale(0.95);
-            background-color: var(--accent-color);
-            color: white;
-            border-color: var(--accent-color);
-        }
          .zoom-btn:disabled { color: var(--text-color-muted); cursor: not-allowed; }
 
     </style>
@@ -218,13 +217,8 @@
 
     <script>
     (function() {
-        const epochData = [
-            { epoch: 1,  output: '1_out.png',    target: '1_target.png' },
-            { epoch: 3,  output: '3_out.png',    target: '3_target.png' },
-            { epoch: 5,  output: '5_out.png',    target: '5_target.png' },
-            { epoch: 7,  output: '7_out.png',    target: '7_target.png' },
-            { epoch: 11, output: '11_out.png',   target: '11_target.png' }
-        ];
+        let epochData = [];
+        const media_folder = ".";
 
         let targetCanvas, outputCanvas, sliderHandle, comparisonSlider, resetViewBtn, zoomInBtn, zoomOutBtn;
         let firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn;
@@ -239,32 +233,69 @@
             [31, 158, 137], [53, 183, 121], [109, 205, 89], [180, 222, 44], [253, 231, 37]
         ];
 
-        function lerp(a, b, t) {
-            return a + (b - a) * t;
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function getColor(v) {
+            const sV = v / 255 * (viridisColormap.length - 1);
+            const i0 = Math.floor(sV), i1 = Math.min(i0 + 1, viridisColormap.length - 1);
+            const t = sV - i0;
+            const c0 = viridisColormap[i0], c1 = viridisColormap[i1];
+            return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
+        }
+        
+        async function loadEpochData() {
+            try {
+                const response = await fetch('manifest.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                data.sort((a, b) => a.epoch - b.epoch);
+                return data;
+            } catch (error) {
+                console.error("Could not load or parse manifest.json:", error);
+                showFatalError(
+                    "Data Load Error",
+                    "Could not find or read `manifest.json`. Please ensure you have run the `generate_manifest.py` script to create this file."
+                );
+                return [];
+            }
+        }
+        
+        function showFatalError(title, message) {
+            const errorHtml = `
+                <div class="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-black">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--error-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-4">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <h3 class="text-lg font-semibold text-white">${title}</h3>
+                    <p class="text-sm text-gray-400 mt-2 max-w-sm">${message}</p>
+                </div>
+            `;
+            comparisonSlider.innerHTML = errorHtml;
+            setAllControlsEnabled(false);
+            epochDisplay.textContent = 'Load Error';
         }
 
-        function getColor(value) {
-            const scaledValue = value / 255 * (viridisColormap.length - 1);
-            const i0 = Math.floor(scaledValue);
-            const i1 = Math.min(i0 + 1, viridisColormap.length - 1);
-            const t = scaledValue - i0;
-            const c0 = viridisColormap[i0];
-            const c1 = viridisColormap[i1];
-            return [
-                lerp(c0[0], c1[0], t),
-                lerp(c0[1], c1[1], t),
-                lerp(c0[2], c1[2], t)
-            ];
-        }
-
-        window.onload = function() {
+        window.onload = async function() {
             setupDOMReferences();
             setupCanvas();
-            preloadImages(() => {
+            const loadedData = await loadEpochData();
+            // This check ensures epochData is not a const
+            if (Array.isArray(loadedData)) {
+                epochData = loadedData;
+            }
+            
+            if (epochData.length > 0) {
+                await preloadImages(); // FIX: Make sure preloading is complete before proceeding
                 setupEventListeners();
                 renderStep(0); 
                 setAllControlsEnabled(true);
-            });
+            } else if (epochData.length === 0 && epochDisplay.textContent === 'Loading...') {
+                 epochDisplay.textContent = "No data in manifest.";
+                 setAllControlsEnabled(false);
+            }
         };
 
         function setupDOMReferences() {
@@ -296,57 +327,61 @@
             [firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn, resetViewBtn, zoomInBtn, zoomOutBtn].forEach(btn => btn.disabled = !enabled);
             if(enabled) updateUI();
         }
-
-        function preloadImages(callback) {
-            let loadedCount = 0;
-            const totalImages = epochData.length * 2;
-            epochDisplay.textContent = 'Loading...';
+        
+        // FIX: Rewrote preloadImages to be fully Promise-based to solve race conditions
+        async function preloadImages() {
+            epochDisplay.textContent = `Loading ${epochData.length * 2} images...`;
             setAllControlsEnabled(false);
-
-            if (epochData.length === 0) {
-              callback();
-              return;
-            }
 
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = CANVAS_WIDTH;
             offscreenCanvas.height = CANVAS_HEIGHT;
             const offscreenCtx = offscreenCanvas.getContext('2d');
+            
+            const imageLoadPromises = [];
 
             epochData.forEach((data, index) => {
-                const targetImg = new Image(), outputImg = new Image();
-                targetImg.crossOrigin = "Anonymous";
-                outputImg.crossOrigin = "Anonymous";
+                const fullTargetUrl = `${media_folder}/${data.target}`;
+                const fullOutputUrl = `${media_folder}/${data.output}`;
 
                 preloadedImages[index] = { 
-                    targetFailed: false, 
-                    outputFailed: false, 
-                    targetUrl: data.target, 
-                    outputUrl: data.output
+                    targetFailed: false, outputFailed: false, 
+                    targetUrl: fullTargetUrl, outputUrl: fullOutputUrl 
                 };
 
-                const onImageLoad = () => {
-                    loadedCount++;
-                    if (loadedCount === totalImages) {
-                        preloadedImages.forEach(item => {
-                            if (!item.targetFailed) item.targetHeatmap = createHeatmap(item.targetImg, offscreenCtx);
-                            if (!item.outputFailed) item.outputHeatmap = createHeatmap(item.outputImg, offscreenCtx);
-                        });
-                        callback();
-                    }
-                };
-                
-                preloadedImages[index].targetImg = targetImg;
-                preloadedImages[index].outputImg = outputImg;
+                // Create a promise for each image pair
+                const pairPromise = new Promise(resolve => {
+                    const targetImg = new Image();
+                    const outputImg = new Image();
+                    targetImg.crossOrigin = "Anonymous";
+                    outputImg.crossOrigin = "Anonymous";
 
-                targetImg.onload = onImageLoad;
-                outputImg.onload = onImageLoad;
-                targetImg.onerror = () => { preloadedImages[index].targetFailed = true; onImageLoad(); };
-                outputImg.onerror = () => { preloadedImages[index].outputFailed = true; onImageLoad(); };
+                    let loadedCount = 0;
+                    const checkDone = () => {
+                        loadedCount++;
+                        if (loadedCount === 2) {
+                            if (!preloadedImages[index].targetFailed) {
+                                epochData[index].targetHeatmap = createHeatmap(targetImg, offscreenCtx);
+                            }
+                            if (!preloadedImages[index].outputFailed) {
+                                epochData[index].outputHeatmap = createHeatmap(outputImg, offscreenCtx);
+                            }
+                            resolve();
+                        }
+                    };
+                    
+                    targetImg.onload = checkDone;
+                    outputImg.onload = checkDone;
+                    targetImg.onerror = () => { preloadedImages[index].targetFailed = true; checkDone(); };
+                    outputImg.onerror = () => { preloadedImages[index].outputFailed = true; checkDone(); };
 
-                targetImg.src = data.target;
-                outputImg.src = data.output;
+                    targetImg.src = fullTargetUrl;
+                    outputImg.src = fullOutputUrl;
+                });
+                imageLoadPromises.push(pairPromise);
             });
+            
+            await Promise.all(imageLoadPromises);
         }
         
         function createHeatmap(image, ctx) {
@@ -357,9 +392,7 @@
             for (let i = 0; i < data.length; i += 4) {
                 const grayscale = data[i];
                 const color = getColor(grayscale);
-                data[i] = color[0];
-                data[i + 1] = color[1];
-                data[i + 2] = color[2];
+                data[i] = color[0]; data[i+1] = color[1]; data[i+2] = color[2];
             }
             ctx.putImageData(imageData, 0, 0);
             const heatmapImage = new Image();
@@ -371,15 +404,15 @@
             ctx.save();
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            ctx.fillStyle = '#f0f0f0';
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            ctx.fillStyle = '#d93a30';
+            ctx.fillStyle = 'var(--error-color)';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.font = 'bold 16px "Inter", sans-serif';
-            ctx.fillText('Image Load Failed', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+            ctx.fillText('Lỗi Tải Ảnh', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
             ctx.font = '12px "Inter", sans-serif';
-            ctx.fillStyle = '#777777';
+            ctx.fillStyle = 'var(--text-color-muted)';
             ctx.fillText('URL:', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
             ctx.fillText(url, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30, CANVAS_WIDTH - 20);
             ctx.restore();
@@ -387,11 +420,10 @@
 
         function drawTransformedImage(ctx, image, hasFailed, url) {
             ctx.save();
-            ctx.fillStyle = '#f0f0f0';
+            ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.translate(transform.offsetX, transform.offsetY);
             ctx.scale(transform.scale, transform.scale);
-            
             if (hasFailed) {
                 drawErrorMessage(ctx, url);
             } else if (image && image.complete) {
@@ -404,17 +436,13 @@
             const safeIndex = Math.max(0, Math.min(index, epochData.length - 1));
             currentIndex = safeIndex;
             const images = preloadedImages[safeIndex];
-            
-            drawTransformedImage(ctxTarget, images.targetHeatmap, images.targetFailed, images.targetUrl);
-            drawTransformedImage(ctxOutput, images.outputHeatmap, images.outputFailed, images.outputUrl);
-            
+            drawTransformedImage(ctxTarget, epochData[safeIndex].targetHeatmap, images.targetFailed, images.targetUrl);
+            drawTransformedImage(ctxOutput, epochData[safeIndex].outputHeatmap, images.outputFailed, images.outputUrl);
             updateUI();
         }
 
         function updateUI() {
-            if (epochData.length === 0) {
-                epochDisplay.textContent = "No data loaded"; return;
-            }
+            if (epochData.length === 0) return;
             const totalIds = epochData.length - 1;
             const currentEpochNumber = epochData[currentIndex].epoch;
             epochDisplay.textContent = `Id: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
@@ -433,11 +461,8 @@
             playIcon.classList.add('hidden');
             pauseIcon.classList.remove('hidden');
             playIntervalId = setInterval(() => {
-                if (currentIndex < epochData.length - 1) {
-                    renderStep(currentIndex + 1);
-                } else {
-                    pauseAnimation();
-                }
+                if (currentIndex < epochData.length - 1) renderStep(currentIndex + 1);
+                else pauseAnimation();
             }, PLAY_INTERVAL);
         }
 
@@ -449,33 +474,25 @@
         }
 
         function handlePlayPause() {
-            if (isPlaying) {
-                pauseAnimation();
-            } else {
-                if (currentIndex >= epochData.length - 1) renderStep(0);
-                playAnimation();
-            }
+            if (isPlaying) pauseAnimation();
+            else { if (currentIndex >= epochData.length - 1) renderStep(0); playAnimation(); }
         }
         
         function handleZoom(direction) {
             const zoomFactor = 1.2;
             const scale = direction === 'in' ? zoomFactor : 1 / zoomFactor;
-            const centerX = CANVAS_WIDTH / 2;
-            const centerY = CANVAS_HEIGHT / 2;
-
+            const centerX = CANVAS_WIDTH / 2, centerY = CANVAS_HEIGHT / 2;
             transform.offsetX = centerX - (centerX - transform.offsetX) * scale;
             transform.offsetY = centerY - (centerY - transform.offsetY) * scale;
             transform.scale *= scale;
-
             renderStep(currentIndex);
         }
 
         function setupEventListeners() {
             let isDraggingSlider = false;
-            sliderHandle.addEventListener('mousedown', () => { isDraggingSlider = true; });
+            sliderHandle.addEventListener('mousedown', () => isDraggingSlider = true);
             document.addEventListener('mouseup', () => { 
-                isDraggingSlider = false;
-                isPanning = false;
+                isDraggingSlider = false; isPanning = false;
                 comparisonSlider.style.cursor = 'grab';
             });
             document.addEventListener('mousemove', (e) => {
@@ -500,11 +517,8 @@
             lastBtn.addEventListener('click', () => renderStep(epochData.length - 1));
             
             comparisonSlider.addEventListener('mousedown', (e) => {
-                if (e.target.closest('button') || e.target === sliderHandle || sliderHandle.contains(e.target)) {
-                    return;
-                }
-                isPanning = true;
-                panStart = { x: e.clientX, y: e.clientY };
+                if (e.target.closest('button') || e.target === sliderHandle || sliderHandle.contains(e.target)) return;
+                isPanning = true; panStart = { x: e.clientX, y: e.clientY };
                 comparisonSlider.style.cursor = 'grabbing';
             });
 
