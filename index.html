@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Calibration Viz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f0f0;
+            --container-bg: #ffffff;
+            --text-color: #333333;
+            --text-color-muted: #777777;
+            --border-color: #cccccc;
+            --button-bg: #e0e0e0;
+            --button-hover-bg: #d5d5d5;
+            --accent-color: #1f77b4;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        h1 {
+            letter-spacing: -0.025em;
+        }
+       
+        .viewer-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 512px; 
+            aspect-ratio: 512 / 256; 
+            overflow: hidden; 
+            border-radius: 8px; 
+            margin: auto;
+            cursor: grab;
+            background-color: var(--container-bg);
+            border: 1px solid var(--border-color);
+        }
+        .viewer-container:active { cursor: grabbing; }
+
+       .viewer-container canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+       }
+
+        #outputCanvas { clip-path: inset(0 50% 0 0); }
+       
+       .viewer-container .slider-handle { 
+            position: absolute; 
+            top: 0; 
+            bottom: 0; 
+            left: 50%; 
+            width: 2px;
+            background: var(--accent-color);
+            cursor: ew-resize; 
+            transform: translateX(-1px); 
+            z-index: 20;
+        }
+        .viewer-container .slider-handle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -12px;
+            width: 26px;
+            height: 100%;
+        }
+
+        .viewer-container .slider-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            height: 40px;
+            width: 10px;
+            transform: translate(-50%, -50%);
+            background-color: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+
+       .controls-container { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 1rem; 
+            padding: 0.75rem; 
+            border-radius: 8px;
+            background-color: var(--container-bg);
+            border: 1px solid var(--border-color);
+       }
+       .control-btn { 
+           border: 1px solid var(--border-color);
+           background-color: var(--button-bg);
+           color: var(--text-color);
+           display: flex; 
+           align-items: center; 
+           justify-content: center; 
+           cursor: pointer; 
+           transition: all 0.2s ease-out; 
+           border-radius: 50%; 
+           width: 44px; 
+           height: 44px;
+        }
+       .control-btn:hover:not(:disabled) {
+           background-color: var(--button-hover-bg);
+           border-color: #bbb;
+       }
+        .control-btn:active:not(:disabled) {
+            transform: scale(0.95);
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+       .control-btn:disabled { 
+            background-color: #f5f5f5;
+            color: var(--text-color-muted);
+            cursor: not-allowed;
+            border-color: #e0e0e0;
+       }
+       .control-btn svg { width: 22px; height: 22px; }
+        
+        #epoch-display { 
+            font-family: 'Inter', sans-serif; 
+            font-size: 0.9rem;
+            font-feature-settings: "tnum"; /* Use tabular numbers for consistent spacing */
+            font-weight: 500;
+            color: var(--text-color-muted); 
+            min-width: 200px; 
+            text-align: center;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            z-index: 30;
+            display: flex;
+            gap: 8px;
+            padding: 6px;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+        }
+        .zoom-btn {
+            background-color: var(--button-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+        }
+         .zoom-btn:hover:not(:disabled) { background-color: var(--button-hover-bg); }
+         .zoom-btn:active:not(:disabled) {
+            transform: scale(0.95);
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+         .zoom-btn:disabled { color: var(--text-color-muted); cursor: not-allowed; }
+
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold tracking-tight">Camera Calibration Viz</h1>
+        </header>
+
+        <div class="space-y-6">
+            <div id="comparison-slider" class="viewer-container">
+                <canvas id="targetCanvas"></canvas>
+                <canvas id="outputCanvas"></canvas>
+                <div class="slider-handle" id="slider-handle"></div>
+
+                <div class="zoom-controls">
+                    <button id="zoom-in-btn" class="zoom-btn" title="Zoom In">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                    <button id="zoom-out-btn" class="zoom-btn" title="Zoom Out">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                    <button id="reset-view-btn" class="zoom-btn" title="Reset View">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"></path><path d="M21 12A9 9 0 0 0 6 5.3L3 8"></path><path d="M21 22v-6h-6"></path><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"></path></svg>
+                    </button>
+                </div>
+            </div>
+            
+             <div class="p-2 rounded-lg max-w-xl mx-auto">
+                <div class="controls-container">
+                    <button id="first-btn" class="control-btn" title="First"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg></button>
+                    <button id="prev-btn" class="control-btn" title="Previous"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                    <button id="play-pause-btn" class="control-btn" title="Play/Pause">
+                         <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+                         <svg id="pause-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                    </button>
+                    <button id="next-btn" class="control-btn" title="Next"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                    <button id="last-btn" class="control-btn" title="Last"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg></button>
+                    <div id="epoch-display">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const epochData = [
+            { epoch: 1,  output: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/1_out.png',    target: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/1_target.png' },
+            { epoch: 3,  output: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/3_out.png',    target: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/3_target.png' },
+            { epoch: 5,  output: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/5_out.png',    target: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/5_target.png' },
+            { epoch: 7,  output: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/7_out.png',    target: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/7_target.png' },
+            { epoch: 11, output: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/11_out.png',   target: 'https://cdn.jsdelivr.net/gh/thienannguyen-cv/SMap@main/assets/11_target.png' }
+        ];
+
+        let targetCanvas, outputCanvas, sliderHandle, comparisonSlider, resetViewBtn, zoomInBtn, zoomOutBtn;
+        let firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn;
+        let epochDisplay, playIcon, pauseIcon;
+        let ctxTarget, ctxOutput;
+        const CANVAS_WIDTH = 512, CANVAS_HEIGHT = 256, PLAY_INTERVAL = 500;
+        let currentIndex = 0, isPlaying = false, playIntervalId = null, preloadedImages = [];
+        let transform = { scale: 1, offsetX: 0, offsetY: 0 }, isPanning = false, panStart = { x: 0, y: 0 };
+
+        const viridisColormap = [
+            [68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142],
+            [31, 158, 137], [53, 183, 121], [109, 205, 89], [180, 222, 44], [253, 231, 37]
+        ];
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function getColor(value) {
+            const scaledValue = value / 255 * (viridisColormap.length - 1);
+            const i0 = Math.floor(scaledValue);
+            const i1 = Math.min(i0 + 1, viridisColormap.length - 1);
+            const t = scaledValue - i0;
+            const c0 = viridisColormap[i0];
+            const c1 = viridisColormap[i1];
+            return [
+                lerp(c0[0], c1[0], t),
+                lerp(c0[1], c1[1], t),
+                lerp(c0[2], c1[2], t)
+            ];
+        }
+
+        window.onload = function() {
+            setupDOMReferences();
+            setupCanvas();
+            preloadImages(() => {
+                setupEventListeners();
+                renderStep(0); 
+                setAllControlsEnabled(true);
+            });
+        };
+
+        function setupDOMReferences() {
+            targetCanvas = document.getElementById('targetCanvas');
+            outputCanvas = document.getElementById('outputCanvas');
+            sliderHandle = document.getElementById('slider-handle');
+            comparisonSlider = document.getElementById('comparison-slider');
+            firstBtn = document.getElementById('first-btn');
+            prevBtn = document.getElementById('prev-btn');
+            playPauseBtn = document.getElementById('play-pause-btn');
+            nextBtn = document.getElementById('next-btn');
+            lastBtn = document.getElementById('last-btn');
+            epochDisplay = document.getElementById('epoch-display');
+            playIcon = document.getElementById('play-icon');
+            pauseIcon = document.getElementById('pause-icon');
+            resetViewBtn = document.getElementById('reset-view-btn');
+            zoomInBtn = document.getElementById('zoom-in-btn');
+            zoomOutBtn = document.getElementById('zoom-out-btn');
+        }
+
+        function setupCanvas() {
+            ctxTarget = targetCanvas.getContext('2d');
+            ctxOutput = outputCanvas.getContext('2d');
+            targetCanvas.width = outputCanvas.width = CANVAS_WIDTH;
+            targetCanvas.height = outputCanvas.height = CANVAS_HEIGHT;
+        }
+
+        function setAllControlsEnabled(enabled) {
+            [firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn, resetViewBtn, zoomInBtn, zoomOutBtn].forEach(btn => btn.disabled = !enabled);
+            if(enabled) updateUI();
+        }
+
+        function preloadImages(callback) {
+            let loadedCount = 0;
+            const totalImages = epochData.length * 2;
+            epochDisplay.textContent = 'Loading...';
+            setAllControlsEnabled(false);
+
+            if (epochData.length === 0) {
+              callback();
+              return;
+            }
+
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = CANVAS_WIDTH;
+            offscreenCanvas.height = CANVAS_HEIGHT;
+            const offscreenCtx = offscreenCanvas.getContext('2d');
+
+            epochData.forEach((data, index) => {
+                const targetImg = new Image(), outputImg = new Image();
+                targetImg.crossOrigin = "Anonymous";
+                outputImg.crossOrigin = "Anonymous";
+
+                preloadedImages[index] = { 
+                    targetFailed: false, 
+                    outputFailed: false, 
+                    targetUrl: data.target, 
+                    outputUrl: data.output
+                };
+
+                const onImageLoad = () => {
+                    loadedCount++;
+                    if (loadedCount === totalImages) {
+                        preloadedImages.forEach(item => {
+                            if (!item.targetFailed) item.targetHeatmap = createHeatmap(item.targetImg, offscreenCtx);
+                            if (!item.outputFailed) item.outputHeatmap = createHeatmap(item.outputImg, offscreenCtx);
+                        });
+                        callback();
+                    }
+                };
+                
+                preloadedImages[index].targetImg = targetImg;
+                preloadedImages[index].outputImg = outputImg;
+
+                targetImg.onload = onImageLoad;
+                outputImg.onload = onImageLoad;
+                targetImg.onerror = () => { preloadedImages[index].targetFailed = true; onImageLoad(); };
+                outputImg.onerror = () => { preloadedImages[index].outputFailed = true; onImageLoad(); };
+
+                targetImg.src = data.target;
+                outputImg.src = data.output;
+            });
+        }
+        
+        function createHeatmap(image, ctx) {
+            ctx.clearRect(0,0,CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const grayscale = data[i];
+                const color = getColor(grayscale);
+                data[i] = color[0];
+                data[i + 1] = color[1];
+                data[i + 2] = color[2];
+            }
+            ctx.putImageData(imageData, 0, 0);
+            const heatmapImage = new Image();
+            heatmapImage.src = ctx.canvas.toDataURL();
+            return heatmapImage;
+        }
+
+        function drawErrorMessage(ctx, url) {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillStyle = '#d93a30';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 16px "Inter", sans-serif';
+            ctx.fillText('Image Load Failed', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+            ctx.font = '12px "Inter", sans-serif';
+            ctx.fillStyle = '#777777';
+            ctx.fillText('URL:', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
+            ctx.fillText(url, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30, CANVAS_WIDTH - 20);
+            ctx.restore();
+        }
+
+        function drawTransformedImage(ctx, image, hasFailed, url) {
+            ctx.save();
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.translate(transform.offsetX, transform.offsetY);
+            ctx.scale(transform.scale, transform.scale);
+            
+            if (hasFailed) {
+                drawErrorMessage(ctx, url);
+            } else if (image && image.complete) {
+                ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            }
+            ctx.restore();
+        }
+
+        function renderStep(index) {
+            const safeIndex = Math.max(0, Math.min(index, epochData.length - 1));
+            currentIndex = safeIndex;
+            const images = preloadedImages[safeIndex];
+            
+            drawTransformedImage(ctxTarget, images.targetHeatmap, images.targetFailed, images.targetUrl);
+            drawTransformedImage(ctxOutput, images.outputHeatmap, images.outputFailed, images.outputUrl);
+            
+            updateUI();
+        }
+
+        function updateUI() {
+            if (epochData.length === 0) {
+                epochDisplay.textContent = "No data loaded"; return;
+            }
+            const totalIds = epochData.length - 1;
+            const currentEpochNumber = epochData[currentIndex].epoch;
+            epochDisplay.textContent = `Id: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
+            const isAtStart = currentIndex === 0, isAtEnd = currentIndex >= totalIds;
+            firstBtn.disabled = isAtStart;
+            prevBtn.disabled = isAtStart;
+            nextBtn.disabled = isAtEnd;
+            lastBtn.disabled = isAtEnd;
+            playPauseBtn.disabled = isAtEnd;
+            if (isAtEnd) pauseAnimation();
+        }
+        
+        function playAnimation() {
+            if (isPlaying) return;
+            isPlaying = true;
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            playIntervalId = setInterval(() => {
+                if (currentIndex < epochData.length - 1) {
+                    renderStep(currentIndex + 1);
+                } else {
+                    pauseAnimation();
+                }
+            }, PLAY_INTERVAL);
+        }
+
+        function pauseAnimation() {
+            isPlaying = false;
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            if (playIntervalId) clearInterval(playIntervalId);
+        }
+
+        function handlePlayPause() {
+            if (isPlaying) {
+                pauseAnimation();
+            } else {
+                if (currentIndex >= epochData.length - 1) renderStep(0);
+                playAnimation();
+            }
+        }
+        
+        function handleZoom(direction) {
+            const zoomFactor = 1.2;
+            const scale = direction === 'in' ? zoomFactor : 1 / zoomFactor;
+            const centerX = CANVAS_WIDTH / 2;
+            const centerY = CANVAS_HEIGHT / 2;
+
+            transform.offsetX = centerX - (centerX - transform.offsetX) * scale;
+            transform.offsetY = centerY - (centerY - transform.offsetY) * scale;
+            transform.scale *= scale;
+
+            renderStep(currentIndex);
+        }
+
+        function setupEventListeners() {
+            let isDraggingSlider = false;
+            sliderHandle.addEventListener('mousedown', () => { isDraggingSlider = true; });
+            document.addEventListener('mouseup', () => { 
+                isDraggingSlider = false;
+                isPanning = false;
+                comparisonSlider.style.cursor = 'grab';
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (isDraggingSlider) {
+                    const rect = comparisonSlider.getBoundingClientRect();
+                    let x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                    const percent = (x / rect.width) * 100;
+                    sliderHandle.style.left = `${percent}%`;
+                    outputCanvas.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
+                } else if (isPanning) {
+                    transform.offsetX += e.clientX - panStart.x;
+                    transform.offsetY += e.clientY - panStart.y;
+                    panStart = { x: e.clientX, y: e.clientY };
+                    renderStep(currentIndex);
+                }
+            });
+
+            firstBtn.addEventListener('click', () => renderStep(0));
+            prevBtn.addEventListener('click', () => { if (currentIndex > 0) renderStep(currentIndex - 1); });
+            playPauseBtn.addEventListener('click', handlePlayPause);
+            nextBtn.addEventListener('click', () => { if (currentIndex < epochData.length - 1) renderStep(currentIndex + 1); });
+            lastBtn.addEventListener('click', () => renderStep(epochData.length - 1));
+            
+            comparisonSlider.addEventListener('mousedown', (e) => {
+                if (e.target.closest('button') || e.target === sliderHandle || sliderHandle.contains(e.target)) {
+                    return;
+                }
+                isPanning = true;
+                panStart = { x: e.clientX, y: e.clientY };
+                comparisonSlider.style.cursor = 'grabbing';
+            });
+
+            comparisonSlider.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const rect = comparisonSlider.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+                const scale = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+                transform.offsetX = mouseX - (mouseX - transform.offsetX) * scale;
+                transform.offsetY = mouseY - (mouseY - transform.offsetY) * scale;
+                transform.scale *= scale;
+                renderStep(currentIndex);
+            });
+            
+            zoomInBtn.addEventListener('click', () => handleZoom('in'));
+            zoomOutBtn.addEventListener('click', () => handleZoom('out'));
+            resetViewBtn.addEventListener('click', () => {
+                transform = { scale: 1, offsetX: 0, offsetY: 0 };
+                renderStep(currentIndex);
+            });
+        }
+    })();
+    </script>
+</body>
+</html>
