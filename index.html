@@ -50,22 +50,25 @@
 
         #outputCanvas { clip-path: inset(0 50% 0 0); }
        
-       /* --- SLIDER HANDLE REDESIGN --- */
        .viewer-container .slider-handle { 
             position: absolute; 
             top: 0; 
             bottom: 0; 
             left: 50%; 
             width: 2px;
-            background: white; /* Will be inverted by mix-blend-mode */
+            background: white;
             cursor: ew-resize; 
             transform: translateX(-1px); 
             z-index: 20;
-            /* Key for high-contrast visibility on any image color */
-            mix-blend-mode: difference; 
+            mix-blend-mode: difference;
+            opacity: 1;
+            transition: opacity 0.25s ease;
+        }
+         .viewer-container.overlay-mode .slider-handle {
+            opacity: 0;
+            pointer-events: none;
         }
 
-        /* Invisible grab area for easier interaction */
         .viewer-container .slider-handle::before {
             content: '';
             position: absolute;
@@ -75,7 +78,6 @@
             height: 100%;
         }
 
-        /* The new transparent, aesthetic knob */
         .viewer-container .slider-handle::after {
             content: '';
             position: absolute;
@@ -83,7 +85,6 @@
             left: 50%;
             height: 40px;
             width: 40px;
-            /* Start smaller and scale up on hover */
             transform: translate(-50%, -50%) scale(0.8);
             background-color: rgba(0, 0, 0, 0.25); 
             border: 1px solid rgba(255, 255, 255, 0.2); 
@@ -94,11 +95,9 @@
             background-repeat: no-repeat;
             background-position: center;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            /* Hide by default */
             opacity: 0; 
         }
 
-        /* On hover of the entire container, fade in the knob */
         .viewer-container:hover .slider-handle::after {
             opacity: 1;
             transform: translate(-50%, -50%) scale(1);
@@ -177,6 +176,10 @@
         }
          .zoom-btn:hover:not(:disabled) { background-color: var(--button-hover-bg); }
          .zoom-btn:disabled { color: var(--text-color-muted); cursor: not-allowed; }
+         .zoom-btn.active {
+            background-color: var(--accent-color);
+            color: white;
+         }
 
     </style>
 </head>
@@ -184,6 +187,7 @@
     <div class="max-w-4xl mx-auto">
         <header class="text-center mb-6">
             <h1 class="text-3xl md:text-4xl font-bold tracking-tight">Camera Calibration Viz</h1>
+            <p id="mode-description" class="text-sm text-gray-400 mt-2 h-5"></p>
         </header>
 
         <div class="space-y-6">
@@ -193,6 +197,9 @@
                 <div class="slider-handle" id="slider-handle"></div>
 
                 <div class="zoom-controls">
+                    <button id="overlay-btn" class="zoom-btn" title="Toggle Overlay Mode">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="14" height="14" rx="2" ry="2" fill="currentColor" stroke-width="2"></rect></svg>
+                    </button>
                     <button id="zoom-in-btn" class="zoom-btn" title="Zoom In">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
@@ -226,34 +233,19 @@
         let epochData = [];
         const media_folder = ".";
 
-        let targetCanvas, outputCanvas, sliderHandle, comparisonSlider, resetViewBtn, zoomInBtn, zoomOutBtn;
+        let targetCanvas, outputCanvas, sliderHandle, comparisonSlider, resetViewBtn, zoomInBtn, zoomOutBtn, overlayBtn, modeDescription;
         let firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn;
         let epochDisplay, playIcon, pauseIcon;
         let ctxTarget, ctxOutput;
         const CANVAS_WIDTH = 512, CANVAS_HEIGHT = 256, PLAY_INTERVAL = 500;
         let currentIndex = 0, isPlaying = false, playIntervalId = null, preloadedImages = [];
         let transform = { scale: 1, offsetX: 0, offsetY: 0 }, isPanning = false, panStart = { x: 0, y: 0 };
+        let isOverlayMode = false;
 
-        const viridisColormap = [
-            [68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142],
-            [31, 158, 137], [53, 183, 121], [109, 205, 89], [180, 222, 44], [253, 231, 37]
-        ];
-
-        function lerp(a, b, t) { return a + (b - a) * t; }
-        function getColor(v) {
-            const sV = v / 255 * (viridisColormap.length - 1);
-            const i0 = Math.floor(sV), i1 = Math.min(i0 + 1, viridisColormap.length - 1);
-            const t = sV - i0;
-            const c0 = viridisColormap[i0], c1 = viridisColormap[i1];
-            return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
-        }
-        
         async function loadEpochData() {
             try {
                 const response = await fetch('manifest.json');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 data.sort((a, b) => a.epoch - b.epoch);
                 return data;
@@ -288,9 +280,7 @@
             setupDOMReferences();
             setupCanvas();
             const loadedData = await loadEpochData();
-            if (Array.isArray(loadedData)) {
-                epochData = loadedData;
-            }
+            if (Array.isArray(loadedData)) epochData = loadedData;
             
             if (epochData.length > 0) {
                 await preloadImages();
@@ -319,6 +309,8 @@
             resetViewBtn = document.getElementById('reset-view-btn');
             zoomInBtn = document.getElementById('zoom-in-btn');
             zoomOutBtn = document.getElementById('zoom-out-btn');
+            overlayBtn = document.getElementById('overlay-btn');
+            modeDescription = document.getElementById('mode-description');
         }
 
         function setupCanvas() {
@@ -329,78 +321,60 @@
         }
 
         function setAllControlsEnabled(enabled) {
-            [firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn, resetViewBtn, zoomInBtn, zoomOutBtn].forEach(btn => btn.disabled = !enabled);
+            [firstBtn, prevBtn, playPauseBtn, nextBtn, lastBtn, resetViewBtn, zoomInBtn, zoomOutBtn, overlayBtn].forEach(btn => btn.disabled = !enabled);
             if(enabled) updateUI();
         }
         
         async function preloadImages() {
             epochDisplay.textContent = `Loading ${epochData.length * 2} images...`;
             setAllControlsEnabled(false);
-
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = CANVAS_WIDTH;
             offscreenCanvas.height = CANVAS_HEIGHT;
             const offscreenCtx = offscreenCanvas.getContext('2d');
-            
-            const imageLoadPromises = [];
-
-            epochData.forEach((data, index) => {
+            const imageLoadPromises = epochData.map((data, index) => {
                 const fullTargetUrl = `${media_folder}/${data.target}`;
                 const fullOutputUrl = `${media_folder}/${data.output}`;
-
-                preloadedImages[index] = { 
-                    targetFailed: false, outputFailed: false, 
-                    targetUrl: fullTargetUrl, outputUrl: fullOutputUrl 
-                };
-
-                const pairPromise = new Promise(resolve => {
-                    const targetImg = new Image();
-                    const outputImg = new Image();
+                preloadedImages[index] = { targetFailed: false, outputFailed: false, targetUrl: fullTargetUrl, outputUrl: fullOutputUrl };
+                return new Promise(resolve => {
+                    const targetImg = new Image(), outputImg = new Image();
                     targetImg.crossOrigin = "Anonymous";
                     outputImg.crossOrigin = "Anonymous";
-
                     let loadedCount = 0;
                     const checkDone = () => {
                         loadedCount++;
                         if (loadedCount === 2) {
-                            if (!preloadedImages[index].targetFailed) {
-                                epochData[index].targetHeatmap = createHeatmap(targetImg, offscreenCtx);
-                            }
-                            if (!preloadedImages[index].outputFailed) {
-                                epochData[index].outputHeatmap = createHeatmap(outputImg, offscreenCtx);
-                            }
+                            if (!preloadedImages[index].targetFailed) epochData[index].targetColorized = colorizeImage(targetImg, [255, 0, 0], offscreenCtx);
+                            if (!preloadedImages[index].outputFailed) epochData[index].outputColorized = colorizeImage(outputImg, [0, 255, 255], offscreenCtx);
                             resolve();
                         }
                     };
-                    
                     targetImg.onload = checkDone;
                     outputImg.onload = checkDone;
                     targetImg.onerror = () => { preloadedImages[index].targetFailed = true; checkDone(); };
                     outputImg.onerror = () => { preloadedImages[index].outputFailed = true; checkDone(); };
-
                     targetImg.src = fullTargetUrl;
                     outputImg.src = fullOutputUrl;
                 });
-                imageLoadPromises.push(pairPromise);
             });
-            
             await Promise.all(imageLoadPromises);
         }
         
-        function createHeatmap(image, ctx) {
-            ctx.clearRect(0,0,CANVAS_WIDTH, CANVAS_HEIGHT);
+        function colorizeImage(image, color, ctx) {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
                 const grayscale = data[i];
-                const color = getColor(grayscale);
-                data[i] = color[0]; data[i+1] = color[1]; data[i+2] = color[2];
+                data[i] = grayscale * (color[0] / 255);
+                data[i + 1] = grayscale * (color[1] / 255);
+                data[i + 2] = grayscale * (color[2] / 255);
             }
             ctx.putImageData(imageData, 0, 0);
-            const heatmapImage = new Image();
-            heatmapImage.src = ctx.canvas.toDataURL();
-            return heatmapImage;
+            const colorizedImage = new Image();
+            colorizedImage.src = ctx.canvas.toDataURL();
+            return colorizedImage;
         }
 
         function drawErrorMessage(ctx, url) {
@@ -413,7 +387,7 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.font = 'bold 16px "Inter", sans-serif';
-            ctx.fillText('Lỗi Tải Ảnh', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+            ctx.fillText('Image Load Error', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
             ctx.font = '12px "Inter", sans-serif';
             ctx.fillStyle = 'var(--text-color-muted)';
             ctx.fillText('URL:', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 10);
@@ -435,12 +409,45 @@
             ctx.restore();
         }
 
+        function renderOverlay(index) {
+            const images = preloadedImages[index];
+            const data = epochData[index];
+
+            // Use target canvas for composite drawing
+            ctxTarget.save();
+            ctxTarget.fillStyle = '#000';
+            ctxTarget.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctxTarget.translate(transform.offsetX, transform.offsetY);
+            ctxTarget.scale(transform.scale, transform.scale);
+            
+            ctxTarget.globalCompositeOperation = 'lighten';
+            
+            if (!images.targetFailed && data.targetColorized?.complete) {
+                ctxTarget.drawImage(data.targetColorized, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            }
+            if (!images.outputFailed && data.outputColorized?.complete) {
+                ctxTarget.drawImage(data.outputColorized, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            }
+            
+            ctxTarget.restore();
+        }
+
         function renderStep(index) {
             const safeIndex = Math.max(0, Math.min(index, epochData.length - 1));
             currentIndex = safeIndex;
-            const images = preloadedImages[safeIndex];
-            drawTransformedImage(ctxTarget, epochData[safeIndex].targetHeatmap, images.targetFailed, images.targetUrl);
-            drawTransformedImage(ctxOutput, epochData[safeIndex].outputHeatmap, images.outputFailed, images.outputUrl);
+
+            ctxTarget.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctxOutput.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            outputCanvas.style.opacity = isOverlayMode ? '0' : '1';
+
+            if (isOverlayMode) {
+                renderOverlay(safeIndex);
+            } else {
+                const images = preloadedImages[safeIndex];
+                drawTransformedImage(ctxTarget, epochData[safeIndex].targetImg, images.targetFailed, images.targetUrl);
+                drawTransformedImage(ctxOutput, epochData[safeIndex].outputImg, images.outputFailed, images.outputUrl);
+            }
+            
             updateUI();
         }
 
@@ -448,7 +455,7 @@
             if (epochData.length === 0) return;
             const totalIds = epochData.length - 1;
             const currentEpochNumber = epochData[currentIndex].epoch;
-            epochDisplay.textContent = `Id: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
+            epochDisplay.textContent = `Page Number: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
             const isAtStart = currentIndex === 0, isAtEnd = currentIndex >= totalIds;
             firstBtn.disabled = isAtStart;
             prevBtn.disabled = isAtStart;
@@ -456,6 +463,8 @@
             lastBtn.disabled = isAtEnd;
             playPauseBtn.disabled = isAtEnd;
             if (isAtEnd) pauseAnimation();
+            
+            modeDescription.innerHTML = isOverlayMode ? `<span style="color: #ff453a;">■</span> Target &nbsp;&nbsp; <span style="color: #00ffff;">■</span> Output &nbsp;&nbsp; <span style="color: white;">■</span> Overlap` : '';
         }
         
         function playAnimation() {
@@ -540,6 +549,12 @@
             zoomOutBtn.addEventListener('click', () => handleZoom('out'));
             resetViewBtn.addEventListener('click', () => {
                 transform = { scale: 1, offsetX: 0, offsetY: 0 };
+                renderStep(currentIndex);
+            });
+            overlayBtn.addEventListener('click', () => {
+                isOverlayMode = !isOverlayMode;
+                overlayBtn.classList.toggle('active');
+                comparisonSlider.classList.toggle('overlay-mode');
                 renderStep(currentIndex);
             });
         }
