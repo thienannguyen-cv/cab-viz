@@ -50,17 +50,18 @@
 
         #outputCanvas { clip-path: inset(0 50% 0 0); }
        
+       /* --- SLIDER HANDLE REDESIGN --- */
        .viewer-container .slider-handle { 
             position: absolute; 
             top: 0; 
             bottom: 0; 
             left: 50%; 
             width: 2px;
-            background: white;
+            background: white; /* Will be inverted by mix-blend-mode */
             cursor: ew-resize; 
             transform: translateX(-1px); 
             z-index: 20;
-            mix-blend-mode: difference;
+            mix-blend-mode: difference; 
             opacity: 1;
             transition: opacity 0.25s ease;
         }
@@ -69,6 +70,7 @@
             pointer-events: none;
         }
 
+        /* Invisible grab area for easier interaction */
         .viewer-container .slider-handle::before {
             content: '';
             position: absolute;
@@ -78,6 +80,7 @@
             height: 100%;
         }
 
+        /* The new transparent, aesthetic knob */
         .viewer-container .slider-handle::after {
             content: '';
             position: absolute;
@@ -279,8 +282,7 @@
         window.onload = async function() {
             setupDOMReferences();
             setupCanvas();
-            const loadedData = await loadEpochData();
-            if (Array.isArray(loadedData)) epochData = loadedData;
+            epochData = await loadEpochData();
             
             if (epochData.length > 0) {
                 await preloadImages();
@@ -328,35 +330,53 @@
         async function preloadImages() {
             epochDisplay.textContent = `Loading ${epochData.length * 2} images...`;
             setAllControlsEnabled(false);
+
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = CANVAS_WIDTH;
             offscreenCanvas.height = CANVAS_HEIGHT;
             const offscreenCtx = offscreenCanvas.getContext('2d');
+            
             const imageLoadPromises = epochData.map((data, index) => {
                 const fullTargetUrl = `${media_folder}/${data.target}`;
                 const fullOutputUrl = `${media_folder}/${data.output}`;
-                preloadedImages[index] = { targetFailed: false, outputFailed: false, targetUrl: fullTargetUrl, outputUrl: fullOutputUrl };
+
+                preloadedImages[index] = { 
+                    targetFailed: false, outputFailed: false, 
+                    targetUrl: fullTargetUrl, outputUrl: fullOutputUrl 
+                };
+
                 return new Promise(resolve => {
-                    const targetImg = new Image(), outputImg = new Image();
+                    const targetImg = new Image();
+                    const outputImg = new Image();
                     targetImg.crossOrigin = "Anonymous";
                     outputImg.crossOrigin = "Anonymous";
+
                     let loadedCount = 0;
                     const checkDone = () => {
                         loadedCount++;
                         if (loadedCount === 2) {
-                            if (!preloadedImages[index].targetFailed) epochData[index].targetColorized = colorizeImage(targetImg, [255, 0, 0], offscreenCtx);
-                            if (!preloadedImages[index].outputFailed) epochData[index].outputColorized = colorizeImage(outputImg, [0, 255, 255], offscreenCtx);
+                            if (!preloadedImages[index].targetFailed) {
+                                epochData[index].targetImg = targetImg;
+                                epochData[index].targetColorized = colorizeImage(targetImg, [255, 0, 0], offscreenCtx);
+                            }
+                            if (!preloadedImages[index].outputFailed) {
+                                epochData[index].outputImg = outputImg;
+                                epochData[index].outputColorized = colorizeImage(outputImg, [0, 255, 255], offscreenCtx);
+                            }
                             resolve();
                         }
                     };
+                    
                     targetImg.onload = checkDone;
                     outputImg.onload = checkDone;
                     targetImg.onerror = () => { preloadedImages[index].targetFailed = true; checkDone(); };
                     outputImg.onerror = () => { preloadedImages[index].outputFailed = true; checkDone(); };
+
                     targetImg.src = fullTargetUrl;
                     outputImg.src = fullOutputUrl;
                 });
             });
+            
             await Promise.all(imageLoadPromises);
         }
         
@@ -412,23 +432,18 @@
         function renderOverlay(index) {
             const images = preloadedImages[index];
             const data = epochData[index];
-
-            // Use target canvas for composite drawing
             ctxTarget.save();
             ctxTarget.fillStyle = '#000';
             ctxTarget.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctxTarget.translate(transform.offsetX, transform.offsetY);
             ctxTarget.scale(transform.scale, transform.scale);
-            
             ctxTarget.globalCompositeOperation = 'lighten';
-            
             if (!images.targetFailed && data.targetColorized?.complete) {
                 ctxTarget.drawImage(data.targetColorized, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             }
             if (!images.outputFailed && data.outputColorized?.complete) {
                 ctxTarget.drawImage(data.outputColorized, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             }
-            
             ctxTarget.restore();
         }
 
@@ -444,6 +459,7 @@
                 renderOverlay(safeIndex);
             } else {
                 const images = preloadedImages[safeIndex];
+                // Use original B&W images for slider mode
                 drawTransformedImage(ctxTarget, epochData[safeIndex].targetImg, images.targetFailed, images.targetUrl);
                 drawTransformedImage(ctxOutput, epochData[safeIndex].outputImg, images.outputFailed, images.outputUrl);
             }
@@ -455,7 +471,7 @@
             if (epochData.length === 0) return;
             const totalIds = epochData.length - 1;
             const currentEpochNumber = epochData[currentIndex].epoch;
-            epochDisplay.textContent = `Page Number: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
+            epochDisplay.textContent = `Page No. ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
             const isAtStart = currentIndex === 0, isAtEnd = currentIndex >= totalIds;
             firstBtn.disabled = isAtStart;
             prevBtn.disabled = isAtStart;
