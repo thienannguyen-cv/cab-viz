@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Computer Vision Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chosen Palette: Apple-esque Clean & Subtle -->
+    <!-- Application Structure Plan: A two-tab single-page application (SPA) allowing users to switch between a 'Camera Calibration' dashboard and a 'Gradient Flow' dashboard. The Camera Calibration tab features interactive image sequence navigation, an image comparison slider, and summary charts. The Gradient Flow tab presents a conceptual visualization of optical flow. This structure provides focused workspaces for each complex concept, enhancing user understanding and interaction. -->
+    <!-- Visualization & Content Choices: The Camera Calibration section uses HTML/JS for responsive image sequence navigation and a custom, transparent image comparison slider, making visual evaluation intuitive. Charts (Doughnut for reprojection error, Radar for comparison criteria - focusing on Pixel-wise and Interactive Slider by default, with Structural Metrics present but togglable) are implemented with Chart.js, providing dynamic, interactive data summaries. The Gradient Flow section employs a canvas element for a procedural optical flow visualization, demonstrating pixel movement conceptually. All elements are designed with ample whitespace, subtle shadows, and a refined color palette for an Apple-like aesthetic. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F8F8; /* Very light grey */
+            color: #1C1C1E; /* Very dark grey */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .nav-btn {
+            padding-bottom: 0.75rem;
+            transition: all 0.2s ease-in-out;
+            border-bottom: 3px solid transparent;
+            color: #8E8E93; /* Medium grey */
+        }
+        .nav-btn.active {
+            border-bottom-color: #007AFF; /* Apple Blue */
+            color: #1C1C1E; /* Dark grey */
+            font-weight: 600;
+        }
+        .nav-btn:hover:not(.active) {
+            color: #5A5A5D; /* Slightly darker grey on hover */
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem; /* More rounded */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.05); /* Softer shadow */
+            padding: 1.5rem; /* Ample padding */
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Constrain max width */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px; /* Base height */
+            max-height: 40vh; /* Max height relative to viewport */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 350px;
+            }
+        }
+        
+        .control-btn {
+            background-color: #EFEFF4; /* Light grey */
+            color: #1C1C1E;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+        .control-btn:hover {
+            background-color: #E2E2E8; /* Slightly darker grey on hover */
+            transform: translateY(-1px);
+        }
+        .control-btn:active {
+            transform: translateY(0);
+        }
+        .control-btn.play {
+            background-color: #34C759; /* Apple Green */
+            color: white;
+        }
+        .control-btn.play:hover {
+            background-color: #2DA84F; /* Darker green on hover */
+        }
+        .control-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3); /* Blue ring focus */
+        }
+
+        /* Image Comparison Slider */
+        .comparison-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            border-radius: 0.75rem; /* Match card radius */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04); /* Deeper, softer shadow */
+        }
+        .comparison-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+        }
+        .comparison-image.original {
+            z-index: 10;
+            clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+        }
+        .comparison-slider {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px; /* Thinner line */
+            height: 100%;
+            background-color: transparent; /* Transparent line */
+            cursor: ew-resize;
+            z-index: 20;
+        }
+        .comparison-slider-handle {
+            position: absolute;
+            /* No fixed top: 50% here, JS will set it dynamically */
+            left: 50%;
+            transform: translate(-50%, -50%); /* Centers horizontally and vertically relative to its dynamic top/left */
+            width: 36px; /* Slightly smaller handle */
+            height: 36px;
+            background-color: transparent; /* Changed to transparent */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px; /* Slightly smaller icon */
+            color: #007AFF; /* Apple Blue handle */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2); /* Clearer handle shadow */
+            border: 1px solid rgba(0,0,0,0.05); /* Subtle border */
+        }
+        
+        /* Optical Flow Canvas */
+        #optical-flow-canvas {
+            background-color: #2C2C2E; /* Dark background for flow visualization */
+            border-radius: 0.75rem; /* Match card radius */
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.3); /* Inner shadow for depth */
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #007AFF, #5AC8FA); /* Lighter blue gradient */
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .section-header {
+            color: #1C1C1E;
+            font-weight: 600;
+        }
+        .sub-header {
+            color: #3A3A3C;
+            font-weight: 500;
+        }
+        .text-body {
+            color: #48484A;
+        }
+
+        /* Spinner for loading indicator */
+        .spinner {
+            animation: spinner 0.8s linear infinite;
+        }
+        @keyframes spinner {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold gradient-text mb-2">Interactive Computer Vision Dashboard</h1>
+            <p class="text-lg md:text-xl text-slate-500">Unveiling Complex Processes with Clarity</p>
+        </header>
+
+        <nav class="flex justify-center items-center border-b border-gray-200 mb-10">
+            <button id="nav-calibration" class="nav-btn active text-lg py-3 px-6">📷 Camera Calibration</button>
+            <button id="nav-gradient" class="nav-btn text-lg py-3 px-6">🎨 Gradient Flow</button>
+        </nav>
+
+        <main>
+            <!-- Calibration View -->
+            <div id="view-calibration">
+                <section class="mb-10 card">
+                    <p class="text-center max-w-3xl mx-auto text-body">
+                        This module provides an interactive environment to evaluate camera calibration results. Navigate through image sequences, directly compare original and undistorted versions using a responsive slider, and review error metrics for comprehensive accuracy assessment.
+                    </p>
+                </section>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Main Visualization Panel -->
+                    <div class="lg:col-span-2 card">
+                        <h2 class="text-2xl section-header text-center mb-6">Interactive Calibration Image Comparator</h2>
+                        
+                        <div class="comparison-container" id="image-comparison-container">
+                            <div id="corrected-image" class="comparison-image corrected"></div>
+                            <div id="original-image" class="comparison-image original"></div>
+                            <div class="comparison-slider" id="comparison-slider-line">
+                                <div class="comparison-slider-handle">⇹</div>
+                            </div>
+                        </div>
+
+                        <!-- Navigation Controls -->
+                        <div class="mt-6">
+                            <input type="range" id="image-index-slider" min="0" max="9" value="0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#007AFF]">
+                            <div class="flex justify-between items-center mt-2 text-sm text-slate-500">
+                                <span>Image 1</span>
+                                <span id="current-image-text" class="font-medium text-base text-slate-800">Image 1 / 10</span>
+                                <span>Image 10</span>
+                            </div>
+                            <div class="flex justify-center space-x-2 mt-4">
+                                <button id="btn-first" class="control-btn py-2 px-4">« First</button>
+                                <button id="btn-prev" class="control-btn py-2 px-4">‹ Prev</button>
+                                <button id="btn-play" class="control-btn py-2 px-4">▶ Play</button>
+                                <button id="btn-next" class="control-btn py-2 px-4">Next ›</button>
+                                <button id="btn-last" class="control-btn py-2 px-4">Last »</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics & Charts Panel -->
+                    <div class="space-y-6">
+                        <div class="card">
+                            <h3 class="text-xl sub-header text-center mb-4">Reprojection Error Distribution</h3>
+                             <p class="text-xs text-center text-slate-500 mb-4">Ideally, reprojection errors should be below 1.0 pixel. This chart showcases typical quality.</p>
+                            <div class="chart-container">
+                                <canvas id="reprojectionErrorChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3 class="text-xl sub-header text-center mb-4">Image Evaluation Technique Criteria</h3>
+                             <p class="text-xs text-center text-slate-500 mb-4">Comparing various evaluation methods based on key criteria for practical application.</p>
+                            <div class="chart-container">
+                                <canvas id="comparisonTechniquesChart"></canvas>
+                            </div>
+                            <div class="flex justify-center mt-4">
+                                <label class="inline-flex items-center text-sm text-slate-700">
+                                    <input type="checkbox" id="toggle-structural-metrics" class="form-checkbox h-4 w-4 text-[#007AFF] rounded focus:ring-[#007AFF]">
+                                    <span class="ml-2">Show Structural Metrics</span>
+                                </label>
+                            </div>
+                        </div>
+                        <!-- New: Gemini AI Insight Feature -->
+                        <div class="card mt-6">
+                            <h3 class="text-xl sub-header text-center mb-4">Calibration Insights ✨</h3>
+                            <button id="btn-get-calibration-insights" class="control-btn bg-[#007AFF] hover:bg-[#005CE6] text-white py-2 px-4 w-full">Get AI Insights</button>
+                            <div id="insight-loading" class="text-center mt-4 hidden">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <div class="spinner border-t-transparent border-solid animate-spin rounded-full border-blue-500 border-2 h-4 w-4"></div>
+                                    <span class="text-sm text-slate-500">Generating insights...</span>
+                                </div>
+                            </div>
+                            <div id="insight-output" class="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-body hidden">
+                                <!-- AI insights will be displayed here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gradient View -->
+            <div id="view-gradient" class="hidden">
+                 <section class="mb-10 card">
+                    <p class="text-center max-w-3xl mx-auto text-body">
+                        Understand how an AI model optimizes an image by visualizing pixel "flow." This module uses an Optical Flow-like technique to illustrate movement vectors from an output image towards a target image.
+                    </p>
+                </section>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    <div class="lg:col-span-2 text-center card flex flex-col items-center justify-center">
+                        <h3 class="text-2xl sub-header mb-4">Output Image</h3>
+                        <img src="https://placehold.co/400x300/F0F0F0/5C5C5E?text=Current+Output&font=inter" class="rounded-lg shadow-md w-full">
+                        <p class="text-sm mt-4 text-slate-500">The current state of the image to be optimized.</p>
+                    </div>
+
+                    <div class="lg:col-span-1 text-center card flex flex-col items-center justify-center">
+                        <h3 class="text-2xl sub-header mb-4">Gradient Flow</h3>
+                        <canvas id="optical-flow-canvas" class="w-full aspect-square rounded-lg shadow-inner"></canvas>
+                        <button id="btn-visualize-flow" class="mt-4 control-btn bg-[#007AFF] hover:bg-[#005CE6] text-white py-2 px-4">Visualize Flow</button>
+                    </div>
+
+                     <div class="lg:col-span-2 text-center card flex flex-col items-center justify-center">
+                        <h3 class="text-2xl sub-header mb-4">Target Image</h3>
+                        <img src="https://placehold.co/400x300/E8F5E9/2E7D32?text=Desired+Target&font=inter" class="rounded-lg shadow-md w-full">
+                         <p class="text-sm mt-4 text-slate-500">The optimal image state the model is converging towards.</p>
+                    </div>
+                </div>
+                <!-- New: Gemini AI Insight for Gradient Flow -->
+                <div class="card mt-6">
+                    <h3 class="text-xl sub-header text-center mb-4">Gradient Flow Explanations ✨</h3>
+                    <button id="btn-explain-flow" class="control-btn bg-[#007AFF] hover:bg-[#005CE6] text-white py-2 px-4 w-full">Explain Flow</button>
+                    <div id="flow-insight-loading" class="text-center mt-4 hidden">
+                        <div class="flex items-center justify-center space-x-2">
+                            <div class="spinner border-t-transparent border-solid animate-spin rounded-full border-blue-500 border-2 h-4 w-4"></div>
+                            <span class="text-sm text-slate-500">Generating explanation...</span>
+                        </div>
+                    </div>
+                    <div id="flow-insight-output" class="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-body hidden">
+                        <!-- AI explanation will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="text-center mt-12 pt-8 border-t border-gray-100">
+            <p class="text-slate-500">Designed to clarify complex concepts in Computer Vision visualization.</p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const appState = {
+                currentView: 'calibration',
+                imageIndex: 0,
+                isPlaying: false,
+                playInterval: null,
+                zoomLevel: 1.0, // New: Current zoom level
+                panX: 0,        // New: Current pan offset X
+                panY: 0,        // New: Current pan offset Y
+                isDraggingSlider: false, // Renamed from isDragging
+                isPanningImage: false    // New: Flag for image panning
+            };
+
+            const mockImages = Array.from({ length: 10 }, (_, i) => ({
+                original: `https://placehold.co/800x450/ffebee/b71c1c?text=Original+Image+${i + 1}&font=inter`, // More subtle red
+                corrected: `https://placehold.co/800x450/e3f2fd/1976d2?text=Corrected+Image+${i + 1}&font=inter`, // More subtle blue
+            }));
+
+            // Element cache
+            const navCalibration = document.getElementById('nav-calibration');
+            const navGradient = document.getElementById('nav-gradient');
+            const viewCalibration = document.getElementById('view-calibration');
+            const viewGradient = document.getElementById('view-gradient');
+
+            // Calibration View Elements
+            const originalImageDiv = document.getElementById('original-image');
+            const correctedImageDiv = document.getElementById('corrected-image');
+            const comparisonContainer = document.getElementById('image-comparison-container');
+            const sliderLine = document.getElementById('comparison-slider-line');
+            const sliderHandle = document.querySelector('.comparison-slider-handle'); // Get the handle element
+            const imageIndexSlider = document.getElementById('image-index-slider');
+            const currentImageText = document.getElementById('current-image-text');
+            const btnFirst = document.getElementById('btn-first');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnPlay = document.getElementById('btn-play');
+            const btnNext = document.getElementById('btn-next');
+            const btnLast = document.getElementById('btn-last');
+
+            // Gradient View Elements
+            const btnVisualizeFlow = document.getElementById('btn-visualize-flow');
+            const opticalFlowCanvas = document.getElementById('optical-flow-canvas');
+            // New: Gradient Flow AI Insight elements
+            const btnExplainFlow = document.getElementById('btn-explain-flow');
+            const flowInsightLoading = document.getElementById('flow-insight-loading');
+            const flowInsightOutput = document.getElementById('flow-insight-output');
+
+            // Chart specific elements
+            const toggleStructuralMetricsCheckbox = document.getElementById('toggle-structural-metrics');
+            // Gemini AI Insight elements
+            const btnGetCalibrationInsights = document.getElementById('btn-get-calibration-insights');
+            const insightLoading = document.getElementById('insight-loading');
+            const insightOutput = document.getElementById('insight-output');
+
+
+            // --- Chart Data & Config ---
+            const chartColors = {
+                primary: '#007AFF', // Apple Blue
+                secondary: '#34C759', // Apple Green
+                accent: '#FFD60A', // Apple Yellow
+                dark: '#1C1C1E', // Dark text
+                lightGrey: '#E5E5EA', // Light grey for borders/backgrounds
+                mediumGrey: '#8E8E93', // Medium grey for secondary text
+                inactiveGrey: 'rgba(142, 142, 147, 0.05)', // Very light, transparent grey for inactive
+                inactiveBorder: 'rgba(142, 142, 147, 0.1)',
+                inactivePoint: 'rgba(142, 142, 147, 0.2)',
+                inactiveHover: 'rgba(142, 142, 147, 0.5)'
+            };
+
+            // Global Tooltip Configuration for Chart.js
+            const globalTooltipConfig = {
+                callbacks: {
+                    title: (tooltipItems) => {
+                        const item = tooltipItems[0];
+                        if (!item || !item.chart || !item.chart.data || !item.chart.data.labels) {
+                            return ''; // Robustness check
+                        }
+                        let label = item.chart.data.labels[item.dataIndex];
+                        return Array.isArray(label) ? label.join(' ') : label;
+                    }
+                }
+            };
+            
+            // Function to wrap long labels
+            const wrapLabels = (label, maxWidth = 16) => {
+                if (typeof label !== 'string' || label.length <= maxWidth) return label;
+                const words = label.split(' ');
+                let lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    if ((currentLine + ' ' + word).trim().length > maxWidth) {
+                        lines.push(currentLine.trim());
+                        currentLine = word;
+                    } else {
+                        currentLine = (currentLine + ' ' + word).trim();
+                    }
+                }
+                if (currentLine) lines.push(currentLine.trim());
+                return lines;
+            };
+
+            // --- View Switching ---
+            const renderView = () => {
+                if (appState.currentView === 'calibration') {
+                    viewCalibration.classList.remove('hidden');
+                    viewGradient.classList.add('hidden');
+                    navCalibration.classList.add('active');
+                    navGradient.classList.remove('active');
+                    updateCalibrationView(); // Ensure view is updated
+                } else {
+                    viewCalibration.classList.add('hidden');
+                    viewGradient.classList.remove('hidden');
+                    navCalibration.classList.remove('active');
+                    navGradient.classList.add('active');
+                    // Draw optical flow only when gradient view is active
+                    // and ensure canvas dimensions are correct
+                    requestAnimationFrame(() => { // Use rAF to ensure canvas dimensions are updated
+                        if (appState.currentView === 'gradient') {
+                            drawOpticalFlow(); 
+                        }
+                    });
+                }
+            };
+
+            navCalibration.addEventListener('click', () => {
+                appState.currentView = 'calibration';
+                renderView();
+            });
+
+            navGradient.addEventListener('click', () => {
+                appState.currentView = 'gradient';
+                renderView();
+            });
+            
+            // --- Calibration View Logic ---
+            const updateCalibrationView = () => {
+                const { original, corrected } = mockImages[appState.imageIndex];
+                originalImageDiv.style.backgroundImage = `url(${original})`;
+                correctedImageDiv.style.backgroundImage = `url(${corrected})`;
+                // Reset zoom/pan when changing images to prevent unexpected state
+                appState.zoomLevel = 1.0;
+                appState.panX = 0;
+                appState.panY = 0;
+                applyImageTransformations(); // Apply reset transformations
+                
+                imageIndexSlider.value = appState.imageIndex;
+                currentImageText.textContent = `Image ${appState.imageIndex + 1} / ${mockImages.length}`;
+            };
+            
+            const changeImageIndex = (newIndex) => {
+                appState.imageIndex = Math.max(0, Math.min(mockImages.length - 1, newIndex));
+                updateCalibrationView();
+            };
+
+            btnFirst.addEventListener('click', () => changeImageIndex(0));
+            btnLast.addEventListener('click', () => changeImageIndex(mockImages.length - 1));
+            btnNext.addEventListener('click', () => changeImageIndex(appState.imageIndex + 1));
+            btnPrev.addEventListener('click', () => changeImageIndex(appState.imageIndex - 1));
+            imageIndexSlider.addEventListener('input', (e) => changeImageIndex(parseInt(e.target.value, 10)));
+
+            const togglePlay = () => {
+                appState.isPlaying = !appState.isPlaying;
+                if (appState.isPlaying) {
+                    btnPlay.textContent = '❚❚ Pause';
+                    btnPlay.classList.add('play');
+                    appState.playInterval = setInterval(() => {
+                        const nextIndex = (appState.imageIndex + 1) % mockImages.length;
+                        changeImageIndex(nextIndex);
+                    }, 1500);
+                } else {
+                    btnPlay.textContent = '▶ Play';
+                    btnPlay.classList.remove('play');
+                    clearInterval(appState.playInterval);
+                }
+            };
+            btnPlay.addEventListener('click', togglePlay);
+
+            // --- Image Zoom/Pan & Slider Logic ---
+            const applyImageTransformations = () => {
+                originalImageDiv.style.backgroundSize = `${appState.zoomLevel * 100}% ${appState.zoomLevel * 100}%`;
+                originalImageDiv.style.backgroundPosition = `${appState.panX}px ${appState.panY}px`;
+                correctedImageDiv.style.backgroundSize = `${appState.zoomLevel * 100}% ${appState.zoomLevel * 100}%`;
+                correctedImageDiv.style.backgroundPosition = `${appState.panX}px ${appState.panY}px`;
+            };
+
+            const updateSliderPosition = (clientX, clientY) => {
+                const rect = comparisonContainer.getBoundingClientRect();
+                const sliderLineRect = sliderLine.getBoundingClientRect();
+
+                // Horizontal movement for the slider line and image clip
+                const horizontalPositionPx = clientX - rect.left;
+                const horizontalPositionPercent = Math.max(0, Math.min(100, (horizontalPositionPx / rect.width) * 100));
+                sliderLine.style.left = `${horizontalPositionPercent}%`;
+                originalImageDiv.style.clipPath = `polygon(0 0, ${horizontalPositionPercent}% 0, ${horizontalPositionPercent}% 100%, 0 100%)`;
+
+                // Vertical movement for the slider handle within its line
+                // The handle's Y position should be relative to the top of the comparison container,
+                // and clamped within its height.
+                const handleTopPx = Math.max(0, Math.min(rect.height, clientY - rect.top));
+                sliderHandle.style.top = `${handleTopPx}px`; // Set directly in pixels
+            };
+
+            comparisonContainer.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Prevent default browser drag behavior (e.g., image ghosting)
+                if (appState.zoomLevel > 1.0) {
+                    appState.isPanningImage = true; // Start panning
+                    appState.lastClientX = e.clientX;
+                    appState.lastClientY = e.clientY;
+                } else {
+                    appState.isDraggingSlider = true; // Start slider drag
+                    updateSliderPosition(e.clientX, e.clientY);
+                }
+            });
+
+            comparisonContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                if (appState.zoomLevel > 1.0) {
+                    appState.isPanningImage = true;
+                    appState.lastClientX = touch.clientX;
+                    appState.lastClientY = touch.clientY;
+                } else {
+                    appState.isDraggingSlider = true;
+                    updateSliderPosition(touch.clientX, touch.clientY);
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                appState.isDraggingSlider = false;
+                appState.isPanningImage = false;
+            });
+            window.addEventListener('touchend', () => {
+                appState.isDraggingSlider = false;
+                appState.isPanningImage = false;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (appState.isPanningImage) {
+                    const dx = e.clientX - appState.lastClientX;
+                    const dy = e.clientY - appState.lastClientY;
+                    appState.panX += dx;
+                    appState.panY += dy;
+                    applyImageTransformations();
+                    appState.lastClientX = e.clientX;
+                    appState.lastClientY = e.clientY;
+                } else if (appState.isDraggingSlider) {
+                    updateSliderPosition(e.clientX, e.clientY);
+                }
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                const touch = e.touches[0];
+                if (appState.isPanningImage) {
+                    const dx = touch.clientX - appState.lastClientX;
+                    const dy = touch.clientY - appState.lastClientY;
+                    appState.panX += dx;
+                    appState.panY += dy;
+                    applyImageTransformations();
+                    appState.lastClientX = touch.clientX;
+                    appState.lastClientY = touch.clientY;
+                } else if (appState.isDraggingSlider) {
+                    updateSliderPosition(touch.clientX, touch.clientY);
+                }
+            });
+
+            // Zoom with mouse wheel
+            comparisonContainer.addEventListener('wheel', (e) => {
+                e.preventDefault(); // Prevent page scroll
+                const rect = comparisonContainer.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const scaleFactor = 1.1; // Zoom step
+                const oldZoom = appState.zoomLevel;
+
+                if (e.deltaY < 0) { // Zoom in
+                    appState.zoomLevel *= scaleFactor;
+                } else { // Zoom out
+                    appState.zoomLevel /= scaleFactor;
+                }
+
+                // Clamp zoom level
+                appState.zoomLevel = Math.max(1.0, Math.min(5.0, appState.zoomLevel)); // Min 1x, Max 5x zoom
+
+                // Adjust pan to zoom around the mouse cursor
+                // Current pixel position of the mouse relative to the image's top-left corner
+                const imgXRelativeToCurrentPan = mouseX - appState.panX;
+                const imgYRelativeToCurrentPan = mouseY - appState.panY;
+
+                // Calculate new pan position to keep the content under the mouse fixed
+                appState.panX = mouseX - (imgXRelativeToCurrentPan * appState.zoomLevel / oldZoom);
+                appState.panY = mouseY - (imgYRelativeToCurrentPan * appState.zoomLevel / oldZoom);
+
+                // If zoomed out to 1.0, reset pan to center
+                if (appState.zoomLevel === 1.0) {
+                    appState.panX = 0;
+                    appState.panY = 0;
+                } else {
+                    // Optional: Clamp pan positions to keep image within container
+                    const contentWidth = rect.width * appState.zoomLevel;
+                    const contentHeight = rect.height * appState.zoomLevel;
+
+                    const minPanX = rect.width - contentWidth;
+                    const minPanY = rect.height - contentHeight;
+
+                    appState.panX = Math.max(minPanX, Math.min(0, appState.panX));
+                    appState.panY = Math.max(minPanY, Math.min(0, appState.panY));
+                }
+
+                applyImageTransformations();
+            });
+
+            // --- Gradient View Logic ---
+            const drawOpticalFlow = () => {
+                const ctx = opticalFlowCanvas.getContext('2d');
+                // Ensure canvas dimensions match its display size
+                opticalFlowCanvas.width = opticalFlowCanvas.offsetWidth;
+                opticalFlowCanvas.height = opticalFlowCanvas.offsetHeight;
+                const width = opticalFlowCanvas.width;
+                const height = opticalFlowCanvas.height;
+                const imageData = ctx.createImageData(width, height);
+                const data = imageData.data;
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const index = (y * width + x) * 4;
+                        // Center coordinates for vector calculation
+                        const centerX = width / 2;
+                        const centerY = height / 2;
+
+                        // Calculate angle and magnitude relative to center
+                        const angle = Math.atan2(y - centerY, x - centerX) + Math.PI; // Angle from 0 to 2PI
+                        const maxMagnitude = Math.sqrt(Math.pow(width/2, 2) + Math.pow(height/2, 2));
+                        const magnitude = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)) / maxMagnitude;
+                        
+                        // HSV to RGB conversion for flow visualization
+                        const hue = (angle / (2 * Math.PI)); // Normalize angle to 0-1 for hue
+                        const saturation = 1;
+                        const value = Math.min(1, magnitude * 1.5); // Boost value for better visibility
+
+                        const [r, g, b] = hsvToRgb(hue, saturation, value);
+                        
+                        data[index] = r;
+                        data[index + 1] = g;
+                        data[index + 2] = b;
+                        data[index + 3] = 255;
+                    }
+                }
+                ctx.putImageData(imageData, 0, 0);
+            };
+            
+            // Utility function for HSV to RGB conversion
+            function hsvToRgb(h, s, v) {
+                let r, g, b;
+                let i = Math.floor(h * 6);
+                let f = h * 6 - i;
+                let p = v * (1 - s);
+                let q = v * (1 - f * s);
+                let t = v * (1 - (1 - f) * s);
+                switch (i % 6) {
+                    case 0: r = v, g = t, b = p; break;
+                    case 1: r = q, g = v, b = p; break;
+                    case 2: r = p, g = v, b = t; break;
+                    case 3: r = p, g = q, b = v; break;
+                    case 4: r = t, g = p, b = v; break;
+                    case 5: r = v, g = p, b = q; break;
+                }
+                return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+            }
+
+            btnVisualizeFlow.addEventListener('click', drawOpticalFlow);
+
+            // --- Initialize Charts ---
+            const reprojectionErrorChartCtx = document.getElementById('reprojectionErrorChart')?.getContext('2d');
+            if(reprojectionErrorChartCtx) {
+                const chart = new Chart(reprojectionErrorChartCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Excellent (<0.5px)', 'Good (0.5-1.0px)', 'Review (>1.0px)'],
+                        datasets: [{
+                            data: [72, 18, 10],
+                            backgroundColor: [chartColors.primary, chartColors.secondary, chartColors.accent],
+                            borderColor: '#F8F8F8', // Match background
+                            borderWidth: 4,
+                        }]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                position: 'bottom',
+                                labels: {
+                                    font: { family: 'Inter' },
+                                    color: chartColors.dark
+                                }
+                            }, 
+                            tooltip: globalTooltipConfig 
+                        } 
+                    }
+                });
+            }
+
+            let comparisonRadarChart; // Declare chart globally to access it for toggling
+            const comparisonTechniquesChartCtx = document.getElementById('comparisonTechniquesChart')?.getContext('2d');
+            if(comparisonTechniquesChartCtx) {
+                comparisonRadarChart = new Chart(comparisonTechniquesChartCtx, {
+                    type: 'radar',
+                    data: {
+                        labels: [
+                            wrapLabels('Quantitative Accuracy'), 
+                            wrapLabels('Perceptual Quality'), 
+                            wrapLabels('Interactive Usability')
+                        ],
+                        datasets: [
+                            { 
+                                label: 'Pixel-wise Comparison', 
+                                data: [10, 2, 3], 
+                                fill: true, 
+                                backgroundColor: 'rgba(0, 122, 255, 0.1)', 
+                                borderColor: chartColors.primary,
+                                pointBackgroundColor: chartColors.primary,
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: chartColors.primary,
+                                hidden: false // Default active
+                            }, 
+                            { 
+                                label: 'Interactive Slider', 
+                                data: [2, 8, 10], 
+                                fill: true, 
+                                backgroundColor: 'rgba(255, 214, 10, 0.1)', 
+                                borderColor: chartColors.accent,
+                                pointBackgroundColor: chartColors.accent,
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: chartColors.accent,
+                                hidden: false // Default active
+                            },
+                             { 
+                                label: 'Structural Metrics (SSIM)', // Label for SSIM
+                                data: [7, 10, 4], // Actual data for SSIM
+                                fill: true, 
+                                backgroundColor: 'rgba(142, 142, 147, 0.05)', // Very light, transparent grey for default inactive
+                                borderColor: 'rgba(142, 142, 147, 0.1)', // Inactive border
+                                pointBackgroundColor: 'rgba(142, 142, 147, 0.2)', 
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: 'rgba(0, 122, 255, 0.8)', // Active hover color
+                                pointHoverBorderColor: '#fff',
+                                borderDash: [5, 5], // Adding a dash effect to the line when inactive
+                                hidden: true // Default hidden
+                            }
+                        ]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                position: 'bottom',
+                                labels: {
+                                    font: { family: 'Inter' },
+                                    color: chartColors.dark
+                                }
+                            }, 
+                            tooltip: globalTooltipConfig 
+                        }, 
+                        scales: { 
+                            r: { 
+                                suggestedMin: 0, 
+                                suggestedMax: 10,
+                                grid: {
+                                    color: chartColors.lightGrey
+                                },
+                                pointLabels: {
+                                    font: { family: 'Inter', size: 12 },
+                                    color: chartColors.dark
+                                },
+                                ticks: {
+                                    backdropColor: '#F8F8F8', // Match background
+                                    color: chartColors.mediumGrey,
+                                    font: { family: 'Inter' },
+                                    stepSize: 2
+                                }
+                            } 
+                        } 
+                    }
+                });
+
+                // Toggle logic for Structural Metrics
+                if (toggleStructuralMetricsCheckbox) {
+                    toggleStructuralMetricsCheckbox.addEventListener('change', (event) => {
+                        const isChecked = event.target.checked;
+                        const ssimDataset = comparisonRadarChart.data.datasets[2]; // Structural Metrics is the third dataset (index 2)
+
+                        ssimDataset.hidden = !isChecked; // Toggle visibility
+
+                        if (isChecked) {
+                            // Set to active colors/styles
+                            ssimDataset.backgroundColor = 'rgba(52, 199, 89, 0.1)'; // Apple Green for active
+                            ssimDataset.borderColor = chartColors.secondary;
+                            ssimDataset.pointBackgroundColor = chartColors.secondary;
+                            ssimDataset.borderDash = []; // Remove dash
+                        } else {
+                            // Set to inactive colors/styles
+                            ssimDataset.backgroundColor = chartColors.inactiveGrey;
+                            ssimDataset.borderColor = chartColors.inactiveBorder;
+                            ssimDataset.pointBackgroundColor = chartColors.inactivePoint;
+                            ssimDataset.borderDash = [5, 5]; // Add dash
+                        }
+                        
+                        comparisonRadarChart.update();
+                    });
+                }
+            }
+
+            // Data for the reprojection error chart (used by Gemini AI feature)
+            const reprojectionErrorData = {
+                excellent: 72,
+                good: 18,
+                review: 10
+            };
+
+            // Gemini AI Integration Logic for Calibration Insights
+            btnGetCalibrationInsights.addEventListener('click', async () => {
+                insightOutput.textContent = ''; // Clear previous insights
+                insightOutput.classList.add('hidden');
+                insightLoading.classList.remove('hidden'); // Show loading indicator
+                btnGetCalibrationInsights.disabled = true; // Disable button
+
+                const prompt = `You are a helpful computer vision expert analyzing camera calibration results. Based on the following reprojection error distribution, provide a concise summary of the implications and suggest general next steps for improving calibration quality. Focus on clarity and actionable advice.
+                Excellent errors (<0.5px): ${reprojectionErrorData.excellent}%
+                Good errors (0.5-1.0px): ${reprojectionErrorData.good}%
+                Review errors (>1.0px): ${reprojectionErrorData.review}%`;
+
+                try {
+                    let chatHistory = [];
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = ""; // Canvas will provide this automatically
+
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        insightOutput.textContent = text;
+                        insightOutput.classList.remove('hidden');
+                    } else {
+                        insightOutput.textContent = 'Failed to generate insights. Please try again.';
+                        insightOutput.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Error calling Gemini API for Calibration Insights:', error);
+                    insightOutput.textContent = `Error: ${error.message}. Could not retrieve insights.`;
+                    insightOutput.classList.remove('hidden');
+                } finally {
+                    insightLoading.classList.add('hidden'); // Hide loading indicator
+                    btnGetCalibrationInsights.disabled = false; // Re-enable button
+                }
+            });
+
+            // New: Gemini AI Integration Logic for Gradient Flow Explanation
+            btnExplainFlow.addEventListener('click', async () => {
+                flowInsightOutput.textContent = ''; // Clear previous explanation
+                flowInsightOutput.classList.add('hidden');
+                flowInsightLoading.classList.remove('hidden'); // Show loading indicator
+                btnExplainFlow.disabled = true; // Disable button
+
+                const prompt = `Explain the concept of optical flow visualization in computer vision. Describe what the colors and directions in a typical optical flow field represent, especially in the context of an AI model optimizing an image from an 'output' state towards a 'target' state. Keep the explanation concise and easy to understand.`;
+
+                try {
+                    let chatHistory = [];
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = ""; // Canvas will provide this automatically
+
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        flowInsightOutput.textContent = text;
+                        flowInsightOutput.classList.remove('hidden');
+                    } else {
+                        flowInsightOutput.textContent = 'Failed to generate explanation. Please try again.';
+                        flowInsightOutput.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Error calling Gemini API for Flow Explanation:', error);
+                    flowInsightOutput.textContent = `Error: ${error.message}. Could not retrieve explanation.`;
+                    flowInsightOutput.classList.remove('hidden');
+                } finally {
+                    flowInsightLoading.classList.add('hidden'); // Hide loading indicator
+                    btnExplainFlow.disabled = false; // Re-enable button
+                }
+            });
+            
+            // --- Initial Render ---
+            renderView();
+        });
+    </script>
+
+</body>
+</html>
