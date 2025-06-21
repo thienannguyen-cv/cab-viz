@@ -472,7 +472,7 @@
             if (epochData.length === 0) return;
             const totalIds = epochData.length - 1;
             const currentEpochNumber = epochData[currentIndex].epoch;
-            epochDisplay.textContent = `Page No. ${currentIndex}/${totalIds} (Epoch ${currentEpochNumber})`;
+            epochDisplay.textContent = `Id: ${currentIndex}/${totalIds} (Epoch: ${currentEpochNumber})`;
             const isAtStart = currentIndex === 0, isAtEnd = currentIndex >= totalIds;
             firstBtn.disabled = isAtStart;
             prevBtn.disabled = isAtStart;
